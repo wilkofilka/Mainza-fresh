@@ -43,7 +43,16 @@ cd mainza-consciousness
 
 ## 🧩 Overlay Mode (nakładka na standardowy frontend)
 
-Możesz uruchomić frontend Mainza jako nakładkę bez przepisywania istniejącej aplikacji hosta:
+Możesz uruchomić frontend Mainza jako nakładkę bez przepisywania istniejącej aplikacji hosta.
+
+### Szybki wariant (lokalnie, bez zmian w host app)
+1. Uruchom frontend: `npm run dev`.
+2. Otwórz: `http://localhost:5173/?mainzaOverlay=1`.
+3. Panel Mainza otworzy się automatycznie.
+4. Aby zamknąć, kliknij przycisk **"Zamknij"** w prawym dolnym rogu.
+
+### Wariant produkcyjny (osadzenie w Twojej aplikacji)
+Wstaw do strony hosta:
 
 ```html
 <script>
@@ -56,8 +65,10 @@ Możesz uruchomić frontend Mainza jako nakładkę bez przepisywania istniejące
 <script type="module" src="/src/main.tsx"></script>
 ```
 
-Alternatywnie użyj parametru URL: `?mainzaOverlay=1`.
-W tym trybie renderowany jest pływający przycisk, który otwiera/zamyka panel Mainza nad istniejącym interfejsem.
+Po załadowaniu strony:
+1. Kliknij przycisk **"Asystent Mainza (kliknij, aby otworzyć)"** w prawym dolnym rogu.
+2. Korzystaj z panelu Mainza jako nakładki nad Twoim obecnym UI.
+3. Kliknij **"Zamknij"**, aby schować panel.
 
 ## 🧠 **Core Features**
 

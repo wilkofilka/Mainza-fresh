@@ -25,7 +25,9 @@ export const shouldStartInOverlayMode = () => {
 
 const OverlayShell = () => {
   const config = window.MAINZA_OVERLAY_CONFIG;
-  const [open, setOpen] = useState(config?.defaultOpen ?? false);
+  const params = new URLSearchParams(window.location.search);
+  const openedFromQueryParam = params.get("mainzaOverlay") === "1";
+  const [open, setOpen] = useState(config?.defaultOpen ?? openedFromQueryParam);
 
   const zIndex = config?.zIndex ?? 9999;
   const title = useMemo(() => config?.title ?? "Mainza Overlay", [config?.title]);
@@ -54,7 +56,7 @@ const OverlayShell = () => {
         }}
       >
         {open ? <X size={18} /> : <Sparkles size={18} />}
-        {open ? "Zamknij" : title}
+        {open ? "Zamknij" : `${title} (kliknij, aby otworzyć)`}
       </button>
 
       {open ? (
