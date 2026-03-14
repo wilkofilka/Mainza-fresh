@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { LiveKitRoom, VideoConference } from '@livekit/components-react';
 import '@livekit/components-styles';
+import { runtimeConfig } from '@/lib/runtime-config';
 
 export const LiveKitVideo: React.FC = () => {
     const [roomName, setRoomName] = useState('my-room');
@@ -41,7 +42,7 @@ export const LiveKitVideo: React.FC = () => {
     if (token) {
         return (
             <LiveKitRoom
-                serverUrl="ws://localhost:7880"
+                serverUrl={runtimeConfig.livekitUrl}
                 token={token}
                 connect={true}
                 style={{ height: '100vh' }}

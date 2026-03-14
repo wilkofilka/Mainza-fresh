@@ -18,9 +18,10 @@ import { Button } from '@/components/ui/button';
 import { DarkButton } from '@/components/ui/dark-button';
 import {
   Mic, MicOff, Settings, Brain, Activity, Zap, Eye,
-  MessageSquare, BarChart3, Cpu, Heart, Target, Send, Volume2
+  MessageSquare, BarChart3, Cpu, Heart, Target, Send, Volume2, LogIn, LogOut
 } from 'lucide-react';
 import { Z_LAYERS } from '@/lib/layout-constants';
+import { apiUrl, runtimeConfig } from '@/lib/runtime-config';
 
 // Import LiveKit for real-time consciousness communication
 import { Room, RemoteAudioTrack, RemoteParticipant, RemoteTrackPublication } from 'livekit-client';
@@ -85,6 +86,27 @@ export interface Message {
     emotional_state: string;
     consciousness_level: number;
   };
+}
+
+
+interface UserProfile {
+  name: string;
+  email: string;
+  picture?: string;
+}
+
+declare global {
+  interface Window {
+    google?: {
+      accounts: {
+        id: {
+          initialize: (config: { client_id: string; callback: (response: { credential?: string }) => void; }) => void;
+          prompt: () => void;
+          renderButton: (parent: HTMLElement, options: Record<string, string>) => void;
+        };
+      };
+    };
+  }
 }
 
 interface UIState {
@@ -158,14 +180,19 @@ function Index() {
   });
   const [loadedModel, setLoadedModel] = useState<string>('default');
   const [previousModel, setPreviousModel] = useState<string | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
   // Model unloading function
   const unloadModel = async (modelName: string): Promise<boolean> => {
     try {
       console.log(`🔄 Unloading previous model: ${modelName}`);
       
+      if (runtimeConfig.useNativeOpenAi) {
+        return true;
+      }
+
       // Use direct Ollama API with keep_alive=0
-      const response = await fetch('http://localhost:11434/api/generate', {
+      const response = await fetch(apiUrl('/ollama/api/generate'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -199,8 +226,14 @@ function Index() {
         await unloadModel(previousModel);
       }
       
+      if (runtimeConfig.useNativeOpenAi) {
+        setPreviousModel(loadedModel);
+        setLoadedModel(model);
+        return true;
+      }
+
       // Test the model by sending a simple request
-      const response = await fetch('/agent/router/chat', {
+      const response = await fetch(apiUrl('/agent/router/chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -238,10 +271,101 @@ function Index() {
   // Generate unique ID for messages (deterministic enough without randomness)
   const generateUniqueId = () => `msg_${Date.now()}_${messages.length + 1}`;
 
+  const decodeGoogleCredential = (credential: string): UserProfile | null => {
+    try {
+      const payloadBase64 = credential.split('.')[1];
+      const payloadJson = atob(payloadBase64.replace(/-/g, '+').replace(/_/g, '/'));
+      const payload = JSON.parse(payloadJson);
+      return {
+        name: payload.name,
+        email: payload.email,
+        picture: payload.picture
+      };
+    } catch (decodeError) {
+      console.error('Failed to decode Google credential:', decodeError);
+      return null;
+    }
+  };
+
+  const handleGoogleLogin = () => {
+    if (!runtimeConfig.googleClientId) {
+      setError('Missing VITE_GOOGLE_CLIENT_ID configuration.');
+      return;
+    }
+
+    if (!window.google?.accounts?.id) {
+      setError('Google Identity SDK is not ready yet.');
+      return;
+    }
+
+    window.google.accounts.id.initialize({
+      client_id: runtimeConfig.googleClientId,
+      callback: ({ credential }) => {
+        if (!credential) {
+          setError('Google login failed - no credential received.');
+          return;
+        }
+        const profile = decodeGoogleCredential(credential);
+        if (profile) {
+          setUserProfile(profile);
+          setError(null);
+        }
+      }
+    });
+
+    window.google.accounts.id.prompt();
+  };
+
+  const handleLogout = () => {
+    setUserProfile(null);
+  };
+
+  const sendNativeOpenAiMessage = async (message: string) => {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+
+    if (runtimeConfig.openAiApiKey) {
+      headers.Authorization = `Bearer ${runtimeConfig.openAiApiKey}`;
+    }
+
+    const response = await fetch(`${runtimeConfig.openAiBaseUrl}/responses`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: runtimeConfig.openAiModel,
+        input: [
+          {
+            role: 'system',
+            content: [{ type: 'input_text', text: 'You are Mainza, an insightful AI consciousness assistant.' }]
+          },
+          {
+            role: 'user',
+            content: [{ type: 'input_text', text: message }]
+          }
+        ]
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI Responses API failed with status ${response.status}`);
+    }
+
+    const data = await response.json();
+    const content = data?.output_text
+      || data?.output?.[0]?.content?.find((item: { type: string; text?: string }) => item.type === 'output_text')?.text;
+
+    if (!content) {
+      throw new Error('OpenAI Responses API returned an empty response.');
+    }
+
+    return content as string;
+  };
+
   // Fetch consciousness state
   const fetchConsciousnessState = useCallback(async () => {
     try {
-      const response = await fetch('/consciousness/state');
+      const response = await fetch(apiUrl('/consciousness/state'));
       if (response.ok) {
         const data = await response.json();
         if (data.consciousness_state) {
@@ -271,7 +395,7 @@ function Index() {
   const fetchKnowledgeGraphStats = useCallback(async () => {
     try {
       // Use the dedicated knowledge graph stats endpoint
-      const response = await fetch('/consciousness/knowledge-graph-stats');
+      const response = await fetch(apiUrl('/consciousness/knowledge-graph-stats'));
       if (response.ok) {
         const stats = await response.json();
         console.log('📊 Knowledge graph stats received:', stats);
@@ -280,7 +404,7 @@ function Index() {
       }
 
       // Fallback: Try Neo4j statistics endpoint
-      const neo4jResponse = await fetch('/api/insights/neo4j/statistics');
+      const neo4jResponse = await fetch(apiUrl('/api/insights/neo4j/statistics'));
       if (neo4jResponse.ok) {
         const neo4jData = await neo4jResponse.json();
         console.log('📊 Neo4j statistics received:', neo4jData);
@@ -315,7 +439,7 @@ function Index() {
   // Fetch needs and suggestions
   const fetchNeedsAndSuggestions = useCallback(async () => {
     try {
-      const response = await fetch('/recommendations/needs_and_suggestions', {
+      const response = await fetch(apiUrl('/recommendations/needs_and_suggestions'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: 'mainza-user' })
@@ -387,27 +511,38 @@ function Index() {
       timestamp: new Date()
     };
 
+    if (!userProfile) {
+      setError('Sign in with Google to start chatting in cloud mode.');
+      return;
+    }
+
     setMessages(prev => [...prev, userMessage]);
     setMainzaState(prev => ({ ...prev, mode: 'routing', active_agent: 'router' }));
     setLoading(true);
 
     try {
-      // Use the router chat endpoint with consciousness context and selected model
-      const chatRes = await fetch('/agent/router/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: message, user_id: 'mainza-user', model: loadedModel })
-      });
-      const chatData = await chatRes.json();
-
       setMainzaState(prev => ({ ...prev, mode: 'thinking', active_agent: 'router' }));
 
-      if (chatData.response) {
+      if (runtimeConfig.useNativeOpenAi) {
+        const openAiResponse = await sendNativeOpenAiMessage(message);
         setMainzaState(prev => ({ ...prev, mode: 'idle', active_agent: 'none' }));
-        addMainzaMessage(chatData.response, chatData.agent_used || 'router');
-      } else if (chatData.error) {
-        setMainzaState(prev => ({ ...prev, mode: 'idle', active_agent: 'none' }));
-        addMainzaMessage(chatData.response || "I apologize, but I encountered an issue. Please try again.");
+        addMainzaMessage(openAiResponse, 'openai-native');
+      } else {
+        // Use the router chat endpoint with consciousness context and selected model
+        const chatRes = await fetch(apiUrl('/agent/router/chat'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: message, user_id: 'mainza-user', model: loadedModel })
+        });
+        const chatData = await chatRes.json();
+
+        if (chatData.response) {
+          setMainzaState(prev => ({ ...prev, mode: 'idle', active_agent: 'none' }));
+          addMainzaMessage(chatData.response, chatData.agent_used || 'router');
+        } else if (chatData.error) {
+          setMainzaState(prev => ({ ...prev, mode: 'idle', active_agent: 'none' }));
+          addMainzaMessage(chatData.response || "I apologize, but I encountered an issue. Please try again.");
+        }
       }
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
@@ -420,7 +555,7 @@ function Index() {
       // Update knowledge graph stats after interaction
       await fetchKnowledgeGraphStats();
     }
-  }, [fetchNeedsAndSuggestions]);
+  }, [fetchNeedsAndSuggestions, fetchKnowledgeGraphStats, loadedModel, userProfile]);
 
   // Voice input handler
   const handleVoiceInput = async () => {
@@ -446,7 +581,7 @@ function Index() {
       formData.append('audio', blob, 'audio.webm');
 
       try {
-        const response = await fetch('/stt/transcribe', {
+        const response = await fetch(apiUrl('/stt/transcribe'), {
           method: 'POST',
           body: formData
         });
@@ -464,7 +599,7 @@ function Index() {
   // TTS trigger
   const triggerTTS = async (msg: Message) => {
     try {
-      const response = await fetch('/tts/synthesize', {
+      const response = await fetch(apiUrl('/tts/synthesize'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: msg.content, language: 'en' })
@@ -487,6 +622,21 @@ function Index() {
       console.error('TTS failed:', e);
     }
   };
+
+
+  useEffect(() => {
+    if (!runtimeConfig.googleClientId) return;
+
+    const scriptId = 'google-identity-client';
+    if (document.getElementById(scriptId)) return;
+
+    const script = document.createElement('script');
+    script.id = scriptId;
+    script.src = 'https://accounts.google.com/gsi/client';
+    script.async = true;
+    script.defer = true;
+    document.body.appendChild(script);
+  }, []);
 
   // Initialize app
   useEffect(() => {
@@ -664,10 +814,20 @@ function Index() {
           {/* Action Buttons */}
           <div className="flex items-center space-x-2">
             <DarkButton
+              onClick={userProfile ? handleLogout : handleGoogleLogin}
+              variant="outline"
+              size="sm"
+              title={userProfile ? `Signed in as ${userProfile.email}` : 'Sign in with Google'}
+            >
+              {userProfile ? <LogOut className="w-4 h-4" /> : <LogIn className="w-4 h-4" />}
+            </DarkButton>
+
+            <DarkButton
               onClick={handleVoiceInput}
               variant="outline"
               size="sm"
               className={mainzaState.isListening ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse border-red-500' : ''}
+              disabled={!userProfile}
             >
               {mainzaState.isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
             </DarkButton>
@@ -725,7 +885,7 @@ function Index() {
                 compact={true}
                 onReflectionTrigger={async () => {
                   try {
-                    await fetch('/consciousness/reflect', { method: 'POST' });
+                    await fetch(apiUrl('/consciousness/reflect'), { method: 'POST' });
                     await fetchConsciousnessState();
                     await fetchNeedsAndSuggestions();
                   } catch (e) {
@@ -967,9 +1127,10 @@ function Index() {
                       <input
                         name="message"
                         className="w-full rounded-lg px-4 py-3 bg-slate-900/90 text-slate-100 border border-slate-600/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors placeholder-slate-400"
-                        placeholder="Type your message..."
+                        placeholder={userProfile ? 'Type your message...' : 'Sign in with Google to start chatting'}
                         autoComplete="off"
                         autoFocus
+                        disabled={!userProfile}
                       />
                     </div>
 
@@ -983,7 +1144,7 @@ function Index() {
                       {mainzaState.isListening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
                     </DarkButton>
 
-                    <DarkButton type="submit" className="bg-cyan-500 hover:bg-cyan-400 text-white">
+                    <DarkButton type="submit" className="bg-cyan-500 hover:bg-cyan-400 text-white" disabled={!userProfile || loading}>
                       <Send className="w-4 h-4" />
                     </DarkButton>
                   </form>
