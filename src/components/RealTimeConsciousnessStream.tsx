@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Activity, Brain, Zap, TrendingUp, AlertCircle, CheckCircle } from 'lucide-react';
+import { wsUrl } from '@/lib/runtime-config';
 
 interface ConsciousnessState {
   consciousness_level: number;
@@ -123,7 +124,7 @@ const RealTimeConsciousnessStream: React.FC = () => {
     setConnectionStatus('connecting');
     
     // Connect to consciousness stream
-    consciousnessWs.current = new WebSocket('ws://localhost:8000/api/ws/consciousness');
+    consciousnessWs.current = new WebSocket(wsUrl('/api/ws/consciousness'));
     consciousnessWs.current.onopen = () => {
       console.log('Consciousness WebSocket connected');
       setConnectionStatus('connected');
@@ -145,7 +146,7 @@ const RealTimeConsciousnessStream: React.FC = () => {
     };
 
     // Connect to performance stream
-    performanceWs.current = new WebSocket('ws://localhost:8000/api/ws/performance');
+    performanceWs.current = new WebSocket(wsUrl('/api/ws/performance'));
     performanceWs.current.onopen = () => {
       console.log('Performance WebSocket connected');
     };
@@ -160,7 +161,7 @@ const RealTimeConsciousnessStream: React.FC = () => {
     };
 
     // Connect to knowledge stream
-    knowledgeWs.current = new WebSocket('ws://localhost:8000/api/ws/knowledge');
+    knowledgeWs.current = new WebSocket(wsUrl('/api/ws/knowledge'));
     knowledgeWs.current.onopen = () => {
       console.log('Knowledge WebSocket connected');
     };
