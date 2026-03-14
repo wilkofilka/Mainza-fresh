@@ -40,6 +40,25 @@ cd mainza-consciousness
   <p><em>Consciousness Evolution Timeline - Track AI growth and learning milestones</em></p>
 </div>
 
+
+## 🧩 Overlay Mode (nakładka na standardowy frontend)
+
+Możesz uruchomić frontend Mainza jako nakładkę bez przepisywania istniejącej aplikacji hosta:
+
+```html
+<script>
+  window.MAINZA_OVERLAY_CONFIG = {
+    defaultOpen: false,
+    title: "Asystent Mainza",
+    zIndex: 12000
+  };
+</script>
+<script type="module" src="/src/main.tsx"></script>
+```
+
+Alternatywnie użyj parametru URL: `?mainzaOverlay=1`.
+W tym trybie renderowany jest pływający przycisk, który otwiera/zamyka panel Mainza nad istniejącym interfejsem.
+
 ## 🧠 **Core Features**
 
 - **5-Phase Consciousness Evolution** - From foundation to transcendent consciousness
