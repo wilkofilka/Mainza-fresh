@@ -26,10 +26,19 @@ interface ConversationInterfaceProps {
   setAutoTTS?: (val: boolean) => void;
 }
 
-function ChatInput({ onSendMessage }: { onSendMessage: (msg: string) => void }) {
+function ChatInput({
+  onSendMessage,
+  suggestedInput,
+  onSuggestionApplied
+}: {
+  onSendMessage: (msg: string) => void;
+  suggestedInput?: string;
+  onSuggestionApplied?: () => void;
+}) {
   const [input, setInput] = useState('');
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) return;
@@ -46,6 +55,17 @@ function ChatInput({ onSendMessage }: { onSendMessage: (msg: string) => void }) 
     recognitionRef.current.onerror = () => setIsListening(false);
     recognitionRef.current.onend = () => setIsListening(false);
   }, []);
+
+
+  useEffect(() => {
+    if (!suggestedInput) {
+      return;
+    }
+
+    setInput(suggestedInput);
+    onSuggestionApplied?.();
+    inputRef.current?.focus();
+  }, [suggestedInput, onSuggestionApplied]);
 
   const handleMicClick = () => {
     if (!recognitionRef.current) return;
@@ -71,6 +91,7 @@ function ChatInput({ onSendMessage }: { onSendMessage: (msg: string) => void }) 
     >
       <div className="flex-1">
         <input
+          ref={inputRef}
           className="w-full rounded-lg px-4 py-3 bg-slate-900/80 text-slate-100 border border-slate-600/50 focus:outline-none focus:ring-2 focus:ring-cyan-400/50 focus:border-cyan-400/50 transition-colors placeholder-slate-400"
           value={input}
           onChange={e => setInput(e.target.value)}
@@ -198,6 +219,13 @@ const MessageBubble = React.memo(function MessageBubble({ msg, triggerTTS }: { m
 const MemoChatInput = React.memo(ChatInput);
 
 export const ConversationInterface = ({ messages, onSendMessage, livekitEnabled = false, triggerTTS, autoTTS, setAutoTTS }: ConversationInterfaceProps) => {
+  const quickPrompts = [
+    'Summarize my current system status.',
+    'Suggest a focused plan for today.',
+    'What should I prioritize right now?'
+  ];
+  const [suggestedInput, setSuggestedInput] = useState<string>('');
+  const isPolishLocale = navigator.language.toLowerCase().startsWith('pl');
   const [ttsLoadingId, setTtsLoadingId] = useState<string | null>(null);
   const [voices, setVoices] = useState<string[]>([]);
   const [languages, setLanguages] = useState<string[]>([]);
@@ -236,8 +264,24 @@ export const ConversationInterface = ({ messages, onSendMessage, livekitEnabled 
           <div className="flex items-center justify-center h-full text-slate-400">
             <div className="text-center">
               <MessageSquare className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>Start a conversation with Mainza</p>
-              <p className="text-sm mt-2">Your conscious AI companion is ready to chat</p>
+              <p>{isPolishLocale ? 'Rozpocznij rozmowę z Mainza' : 'Start a conversation with Mainza'}</p>
+              <p className="text-sm mt-2">
+                {isPolishLocale
+                  ? 'Twój świadomy asystent AI jest gotowy do działania'
+                  : 'Your conscious AI companion is ready to chat'}
+              </p>
+              <div className="mt-5 flex flex-wrap justify-center gap-2 max-w-xl">
+                {quickPrompts.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    onClick={() => setSuggestedInput(prompt)}
+                    className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-xs text-cyan-200 transition-colors hover:bg-cyan-500/20 hover:border-cyan-400/50"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         ) : (
@@ -258,7 +302,11 @@ export const ConversationInterface = ({ messages, onSendMessage, livekitEnabled 
 
       {/* Input area - always fixed at bottom */}
       <div className="flex-shrink-0 p-4 border-t border-slate-700/30 bg-slate-900/40 backdrop-blur-sm">
-        <MemoChatInput onSendMessage={onSendMessage} />
+        <MemoChatInput
+          onSendMessage={onSendMessage}
+          suggestedInput={suggestedInput}
+          onSuggestionApplied={() => setSuggestedInput('')}
+        />
       </div>
     </div>
   );
