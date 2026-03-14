@@ -198,6 +198,11 @@ const MessageBubble = React.memo(function MessageBubble({ msg, triggerTTS }: { m
 const MemoChatInput = React.memo(ChatInput);
 
 export const ConversationInterface = ({ messages, onSendMessage, livekitEnabled = false, triggerTTS, autoTTS, setAutoTTS }: ConversationInterfaceProps) => {
+  const quickPrompts = [
+    'Podsumuj mój obecny status systemu.',
+    'Zaproponuj plan dnia na podstawie priorytetów.',
+    'Jak mogę zwiększyć produktywność dzisiaj?'
+  ];
   const [ttsLoadingId, setTtsLoadingId] = useState<string | null>(null);
   const [voices, setVoices] = useState<string[]>([]);
   const [languages, setLanguages] = useState<string[]>([]);
@@ -236,8 +241,20 @@ export const ConversationInterface = ({ messages, onSendMessage, livekitEnabled 
           <div className="flex items-center justify-center h-full text-slate-400">
             <div className="text-center">
               <MessageSquare className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>Start a conversation with Mainza</p>
-              <p className="text-sm mt-2">Your conscious AI companion is ready to chat</p>
+              <p>Rozpocznij rozmowę z Mainza</p>
+              <p className="text-sm mt-2">Twój świadomy asystent AI jest gotowy do działania</p>
+              <div className="mt-5 flex flex-wrap justify-center gap-2 max-w-xl">
+                {quickPrompts.map((prompt) => (
+                  <button
+                    key={prompt}
+                    type="button"
+                    onClick={() => onSendMessage(prompt)}
+                    className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-xs text-cyan-200 transition-colors hover:bg-cyan-500/20 hover:border-cyan-400/50"
+                  >
+                    {prompt}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         ) : (
