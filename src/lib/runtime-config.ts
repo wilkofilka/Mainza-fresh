@@ -31,7 +31,7 @@ export const runtimeConfig = {
   apiBaseUrl: resolveApiBaseUrl(),
   wsBaseUrl: resolveWsBaseUrl(),
   livekitUrl: import.meta.env.VITE_LIVEKIT_URL || 'ws://localhost:7880',
-  openAiBaseUrl: trimTrailingSlash(import.meta.env.VITE_OPENAI_BASE_URL || 'https://api.openai.com/v1'),
+  openAiBaseUrl: trimTrailingSlash(import.meta.env.VITE_OPENAI_BASE_URL || '/v1'),
   openAiApiKey: import.meta.env.VITE_OPENAI_API_KEY || '',
   openAiModel: import.meta.env.VITE_OPENAI_MODEL || 'gpt-4o-mini',
   useNativeOpenAi: import.meta.env.VITE_USE_OPENAI_NATIVE === 'true',

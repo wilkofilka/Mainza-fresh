@@ -21,7 +21,7 @@ import {
   MessageSquare, BarChart3, Cpu, Heart, Target, Send, Volume2, LogIn, LogOut
 } from 'lucide-react';
 import { Z_LAYERS } from '@/lib/layout-constants';
-import { runtimeConfig } from '@/lib/runtime-config';
+import { apiUrl, runtimeConfig } from '@/lib/runtime-config';
 
 // Import LiveKit for real-time consciousness communication
 import { Room, RemoteAudioTrack, RemoteParticipant, RemoteTrackPublication } from 'livekit-client';
@@ -192,7 +192,7 @@ function Index() {
       }
 
       // Use direct Ollama API with keep_alive=0
-      const response = await fetch(`${runtimeConfig.apiBaseUrl}/ollama/api/generate`, {
+      const response = await fetch(apiUrl('/ollama/api/generate'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -226,8 +226,14 @@ function Index() {
         await unloadModel(previousModel);
       }
       
+      if (runtimeConfig.useNativeOpenAi) {
+        setPreviousModel(loadedModel);
+        setLoadedModel(model);
+        return true;
+      }
+
       // Test the model by sending a simple request
-      const response = await fetch('/agent/router/chat', {
+      const response = await fetch(apiUrl('/agent/router/chat'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -315,35 +321,42 @@ function Index() {
   };
 
   const sendNativeOpenAiMessage = async (message: string) => {
-    if (!runtimeConfig.openAiApiKey) {
-      throw new Error('Missing VITE_OPENAI_API_KEY for native OpenAI mode.');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+
+    if (runtimeConfig.openAiApiKey) {
+      headers.Authorization = `Bearer ${runtimeConfig.openAiApiKey}`;
     }
 
-    const response = await fetch(`${runtimeConfig.openAiBaseUrl}/chat/completions`, {
+    const response = await fetch(`${runtimeConfig.openAiBaseUrl}/responses`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${runtimeConfig.openAiApiKey}`
-      },
+      headers,
       body: JSON.stringify({
         model: runtimeConfig.openAiModel,
-        messages: [
-          { role: 'system', content: 'You are Mainza, an insightful AI consciousness assistant.' },
-          { role: 'user', content: message }
-        ],
-        temperature: 0.7
+        input: [
+          {
+            role: 'system',
+            content: [{ type: 'input_text', text: 'You are Mainza, an insightful AI consciousness assistant.' }]
+          },
+          {
+            role: 'user',
+            content: [{ type: 'input_text', text: message }]
+          }
+        ]
       })
     });
 
     if (!response.ok) {
-      throw new Error(`OpenAI request failed with status ${response.status}`);
+      throw new Error(`OpenAI Responses API failed with status ${response.status}`);
     }
 
     const data = await response.json();
-    const content = data?.choices?.[0]?.message?.content;
+    const content = data?.output_text
+      || data?.output?.[0]?.content?.find((item: { type: string; text?: string }) => item.type === 'output_text')?.text;
 
     if (!content) {
-      throw new Error('OpenAI returned an empty response.');
+      throw new Error('OpenAI Responses API returned an empty response.');
     }
 
     return content as string;
@@ -352,7 +365,7 @@ function Index() {
   // Fetch consciousness state
   const fetchConsciousnessState = useCallback(async () => {
     try {
-      const response = await fetch('/consciousness/state');
+      const response = await fetch(apiUrl('/consciousness/state'));
       if (response.ok) {
         const data = await response.json();
         if (data.consciousness_state) {
@@ -382,7 +395,7 @@ function Index() {
   const fetchKnowledgeGraphStats = useCallback(async () => {
     try {
       // Use the dedicated knowledge graph stats endpoint
-      const response = await fetch('/consciousness/knowledge-graph-stats');
+      const response = await fetch(apiUrl('/consciousness/knowledge-graph-stats'));
       if (response.ok) {
         const stats = await response.json();
         console.log('📊 Knowledge graph stats received:', stats);
@@ -391,7 +404,7 @@ function Index() {
       }
 
       // Fallback: Try Neo4j statistics endpoint
-      const neo4jResponse = await fetch('/api/insights/neo4j/statistics');
+      const neo4jResponse = await fetch(apiUrl('/api/insights/neo4j/statistics'));
       if (neo4jResponse.ok) {
         const neo4jData = await neo4jResponse.json();
         console.log('📊 Neo4j statistics received:', neo4jData);
@@ -426,7 +439,7 @@ function Index() {
   // Fetch needs and suggestions
   const fetchNeedsAndSuggestions = useCallback(async () => {
     try {
-      const response = await fetch('/recommendations/needs_and_suggestions', {
+      const response = await fetch(apiUrl('/recommendations/needs_and_suggestions'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_id: 'mainza-user' })
@@ -516,7 +529,7 @@ function Index() {
         addMainzaMessage(openAiResponse, 'openai-native');
       } else {
         // Use the router chat endpoint with consciousness context and selected model
-        const chatRes = await fetch('/agent/router/chat', {
+        const chatRes = await fetch(apiUrl('/agent/router/chat'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ query: message, user_id: 'mainza-user', model: loadedModel })
@@ -568,7 +581,7 @@ function Index() {
       formData.append('audio', blob, 'audio.webm');
 
       try {
-        const response = await fetch('/stt/transcribe', {
+        const response = await fetch(apiUrl('/stt/transcribe'), {
           method: 'POST',
           body: formData
         });
@@ -586,7 +599,7 @@ function Index() {
   // TTS trigger
   const triggerTTS = async (msg: Message) => {
     try {
-      const response = await fetch('/tts/synthesize', {
+      const response = await fetch(apiUrl('/tts/synthesize'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: msg.content, language: 'en' })
@@ -872,7 +885,7 @@ function Index() {
                 compact={true}
                 onReflectionTrigger={async () => {
                   try {
-                    await fetch('/consciousness/reflect', { method: 'POST' });
+                    await fetch(apiUrl('/consciousness/reflect'), { method: 'POST' });
                     await fetchConsciousnessState();
                     await fetchNeedsAndSuggestions();
                   } catch (e) {
